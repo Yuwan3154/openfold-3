@@ -38,6 +38,7 @@ class TriangleAttention(nn.Module):
         starting=True,
         inf=1e9,
         linear_init_params=lin_init.tri_att_init,
+        transpose_bias=False,
     ):
         """
         Args:
@@ -47,6 +48,12 @@ class TriangleAttention(nn.Module):
                 Overall hidden channel dimension (not per-head)
             no_heads:
                 Number of attention heads
+            transpose_bias:
+                AF3-faithful ending node. AF3's GridSelfAttention(transpose=True)
+                computes the pair bias from the UNtransposed pair (only q/k/v use the
+                transposed pair). When this module is fed a pre-transposed pair (OF3's
+                ending-node convention), set True to compute linear_z from x^T so the
+                applied bias matches AF3. Default False = stock OF3 behavior.
         """
         super().__init__()
 
@@ -55,6 +62,7 @@ class TriangleAttention(nn.Module):
         self.no_heads = no_heads
         self.starting = starting
         self.inf = inf
+        self.transpose_bias = transpose_bias
 
         self.layer_norm = LayerNorm(self.c_in)
 
@@ -137,8 +145,10 @@ class TriangleAttention(nn.Module):
         # [*, I, 1, 1, J]
         mask_bias = (self.inf * (mask - 1))[..., :, None, None, :]
 
-        # [*, H, I, J]
-        triangle_bias = permute_final_dims(self.linear_z(x), (2, 0, 1))
+        # [*, H, I, J]. AF3-faithful ending node computes the bias from the
+        # UNtransposed pair (x is already transposed here), so feed x^T to linear_z.
+        bias_input = x.transpose(-2, -3) if self.transpose_bias else x
+        triangle_bias = permute_final_dims(self.linear_z(bias_input), (2, 0, 1))
 
         # [*, 1, H, I, J]
         triangle_bias = triangle_bias.unsqueeze(-4)
