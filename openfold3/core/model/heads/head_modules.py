@@ -217,12 +217,16 @@ class AuxiliaryHeadsAllAtom(nn.Module):
 
         # Get atom mask padded to MAX_ATOMS_PER_TOKEN
         # Required to extract pLDDT and experimentally resolved logits for
-        # the flat atom representation
+        # the flat atom representation.
+        # Use the pLDDT head's true linear factor (out_features // c_out) so the
+        # mask padding matches the head reshape factor even if self.max_atoms_per_token
+        # was set inconsistently after the weights were built.
+        head_atoms_per_token = self.plddt.linear.weight.shape[0] // self.plddt.c_out
         max_atom_per_token_mask = broadcast_token_feat_to_atoms(
             token_mask=token_mask,
             num_atoms_per_token=batch["num_atoms_per_token"],
             token_feat=token_mask,
-            max_num_atoms_per_token=self.max_atoms_per_token,
+            max_num_atoms_per_token=head_atoms_per_token,
         )
         # Expand to match sample dimension
         max_atom_per_token_mask = max_atom_per_token_mask.expand(

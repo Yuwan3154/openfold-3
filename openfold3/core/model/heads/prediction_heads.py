@@ -554,13 +554,16 @@ class PerResidueLDDTAllAtom(nn.Module):
         batch_dims = s.shape[:-2]
         n_token = s.shape[-2]
 
-        # [*, N_token, max_atoms_per_token * c_out]
+        # Derive the atoms-per-token reshape factor from the linear weight itself
+        # (out_features == atoms_per_token * c_out) so it can never desync from a
+        # stale self.max_atoms_per_token attribute set after weights were built.
+        atoms_per_token = self.linear.weight.shape[0] // self.c_out
+
+        # [*, N_token, atoms_per_token * c_out]
         logits = self.linear(self.layer_norm(s))
 
-        # [*, N_token * max_atoms_per_token, c_out]
-        logits = logits.reshape(
-            *batch_dims, n_token * self.max_atoms_per_token, self.c_out
-        )
+        # [*, N_token * atoms_per_token, c_out]
+        logits = logits.reshape(*batch_dims, n_token * atoms_per_token, self.c_out)
 
         # [*, N_atom, c_out]
         logits = max_atom_per_token_masked_select(
@@ -621,13 +624,16 @@ class ExperimentallyResolvedHeadAllAtom(nn.Module):
         batch_dims = s.shape[:-2]
         n_token = s.shape[-2]
 
-        # [*, N_token, max_atoms_per_token * c_out]
+        # Derive the atoms-per-token reshape factor from the linear weight itself
+        # (out_features == atoms_per_token * c_out) so it can never desync from a
+        # stale self.max_atoms_per_token attribute set after weights were built.
+        atoms_per_token = self.linear.weight.shape[0] // self.c_out
+
+        # [*, N_token, atoms_per_token * c_out]
         logits = self.linear(self.layer_norm(s))
 
-        # [*, N_token * max_atoms_per_token, c_out]
-        logits = logits.reshape(
-            *batch_dims, n_token * self.max_atoms_per_token, self.c_out
-        )
+        # [*, N_token * atoms_per_token, c_out]
+        logits = logits.reshape(*batch_dims, n_token * atoms_per_token, self.c_out)
 
         # [*, N_atom, c_out]
         logits = max_atom_per_token_masked_select(
